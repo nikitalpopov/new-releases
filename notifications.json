@@ -68,7 +68,7 @@
     },
     {
       "parameters": {
-        "functionCode": "let name, artists, images, type, album_type, album_group, release_date, external_urls, id, uri;\n({ name, artists, images, type, album_type, album_group, release_date, external_urls, id, uri } = item);\n\nconst image = images.length ? images[0].url : undefined;\nconst spotify_url = external_urls ? external_urls.spotify : undefined;\n\nconst result = {\n  title: `${artists.map(i => i.name).join(', ')} - ${name}`,\n  spotify_url,\n  image,\n  name,\n  artists,\n  type,\n  album_type,\n  album_group,\n  release_date,\n  id,\n  uri\n};\n\nreturn result;"
+        "functionCode": "let name, artists, images, type, album_type, album_group, release_date, external_urls, id, uri;\n({ name, artists, images, type, album_type, album_group, release_date, external_urls, id, uri } = item);\n\nconst image = images.length ? images[0].url : undefined;\nconst spotify_url = external_urls ? external_urls.spotify : undefined;\nconst odesli_url = 'https://album.link/s/' + spotify_url.split('/').pop();\n\nconst result = {\n  title: `${artists.map(i => i.name).join(', ')} - ${name}`,\n  spotify_url,\n  odesli_url,\n  image,\n  name,\n  artists,\n  type,\n  album_type,\n  album_group,\n  release_date,\n  id,\n  uri\n};\n\nreturn result;"
       },
       "name": "MapAlbumInfo",
       "type": "n8n-nodes-base.functionItem",
@@ -81,7 +81,7 @@
     {
       "parameters": {
         "chatId": "$TELEGRAM_CHAT_ID",
-        "text": "={{$json[\"title\"]}}\n{{$json[\"release_date\"]}}\n{{$json[\"spotify_url\"]}}",
+        "text": "={{$json[\"title\"]}}\n{{$json[\"release_date\"]}}\n{{$json[\"spotify_url\"]}}\n{{$json[\"odesli_url\"]}}",
         "additionalFields": {}
       },
       "name": "Telegram::SendNotification",
