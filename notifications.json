@@ -1,0 +1,406 @@
+{
+  "name": "New releases",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1,
+      "position": [
+        -1380,
+        -1310
+      ]
+    },
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "custom",
+              "cronExpression": "0 0 12 * * 2,4,6"
+            }
+          ]
+        }
+      },
+      "name": "Cron",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        -1380,
+        -1510
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "myData",
+        "returnAll": true
+      },
+      "name": "Spotify::GetFollowedArtists",
+      "type": "n8n-nodes-base.spotify",
+      "typeVersion": 1,
+      "position": [
+        -1180,
+        -1510
+      ],
+      "retryOnFail": true,
+      "credentials": {
+        "spotifyOAuth2Api": "Spotify"
+      }
+    },
+    {
+      "parameters": {
+        "resource": "artist",
+        "operation": "getAlbums",
+        "id": "={{$json[\"uri\"]}}",
+        "limit": 3
+      },
+      "name": "Spotify::GetArtistAlbums",
+      "type": "n8n-nodes-base.spotify",
+      "typeVersion": 1,
+      "position": [
+        -780,
+        -1510
+      ],
+      "retryOnFail": true,
+      "credentials": {
+        "spotifyOAuth2Api": "Spotify"
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "let name, artists, images, type, album_type, album_group, release_date, external_urls, id, uri;\n({ name, artists, images, type, album_type, album_group, release_date, external_urls, id, uri } = item);\n\nconst image = images.length ? images[0].url : undefined;\nconst spotify_url = external_urls ? external_urls.spotify : undefined;\n\nconst result = {\n  title: `${artists.map(i => i.name).join(', ')} - ${name}`,\n  spotify_url,\n  image,\n  name,\n  artists,\n  type,\n  album_type,\n  album_group,\n  release_date,\n  id,\n  uri\n};\n\nreturn result;"
+      },
+      "name": "MapAlbumInfo",
+      "type": "n8n-nodes-base.functionItem",
+      "typeVersion": 1,
+      "position": [
+        -580,
+        -1510
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "$TELEGRAM_CHAT_ID",
+        "text": "={{$json[\"title\"]}}\n{{$json[\"release_date\"]}}\n{{$json[\"spotify_url\"]}}",
+        "additionalFields": {}
+      },
+      "name": "Telegram::SendNotification",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        20,
+        -1510
+      ],
+      "credentials": {
+        "telegramApi": "Telegram bot"
+      }
+    },
+    {
+      "parameters": {
+        "mode": "multiplex"
+      },
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 1,
+      "position": [
+        -380,
+        -1490
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "$TELEGRAM_CHAT_ID",
+        "text": "=Hi! There are new releases since {{new Date($json[\"lastRun\"]).toUTCString()}}",
+        "additionalFields": {}
+      },
+      "name": "Telegram::SendWelcome",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        -250,
+        -1310
+      ],
+      "credentials": {
+        "telegramApi": "Telegram bot"
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "url": "https://api.airtable.com/v0/$AIRTABLE_TABLE_ID/$AIRTABLE_SHEET_NAME",
+        "options": {},
+        "headerParametersUi": {
+          "parameter": []
+        }
+      },
+      "name": "Airtable::RetrieveRuns",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        -780,
+        -1310
+      ],
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "maxTries": 5,
+      "credentials": {
+        "httpHeaderAuth": "Airtable"
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "authentication": "headerAuth",
+        "requestMethod": "POST",
+        "url": "https://api.airtable.com/v0/$AIRTABLE_TABLE_ID/$AIRTABLE_SHEET_NAME",
+        "jsonParameters": true,
+        "options": {
+          "bodyContentType": "json"
+        },
+        "bodyParametersJson": "={ \"records\": [ { \"fields\": { \"Datetime\": \"{{new Date().toISOString()}}\" } } ] }"
+      },
+      "name": "Airtable::SaveCurrentRun",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        -380,
+        -1160
+      ],
+      "credentials": {
+        "httpHeaderAuth": "Airtable"
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const today = new Date(new Date().toISOString().split(\"T\")[0]);\n\nconst tomorrow = new Date(today);\ntomorrow.setDate(today.getDate() + 1);\n\nconst weekBefore = new Date(today);\nweekBefore.setDate(today.getDate() - 7);\n\nlet result;\nif (item && item.records && item.records.length) {\n  result = item.records.sort((a, b) => {\n    return new Date(b.createdTime).getTime() - new Date(a.createdTime).getTime();\n  })[0];\n  result = result.fields[\"Datetime\"];\n}\nconst lastRun = result ?? weekBefore;\n\nreturn { lastRun, tomorrow  };\n"
+      },
+      "name": "RetrieveLastRun",
+      "type": "n8n-nodes-base.functionItem",
+      "typeVersion": 1,
+      "position": [
+        -580,
+        -1310
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json[\"album_group\"]}}",
+              "operation": "notEqual",
+              "value2": "=\"appears_on\""
+            }
+          ],
+          "dateTime": [
+            {
+              "value1": "={{new Date($json[\"release_date\"])}}",
+              "value2": "={{new Date($json[\"lastRun\"])}}"
+            },
+            {
+              "value1": "={{new Date($json[\"release_date\"])}}",
+              "operation": "before",
+              "value2": "={{new Date($json[\"tomorrow\"])}}"
+            }
+          ]
+        }
+      },
+      "name": "IF",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -180,
+        -1490
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "items = items.sort((a, b) => b.json.popularity - a.json.popularity);\nreturn items;"
+      },
+      "name": "SortArtistsByPopularity",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -980,
+        -1510
+      ]
+    },
+    {
+      "parameters": {},
+      "name": "NoOp",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -980,
+        -1310
+      ]
+    },
+    {
+      "parameters": {},
+      "name": "NoOp1",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -1170,
+        -1310
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Spotify::GetFollowedArtists",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "NoOp1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cron": {
+      "main": [
+        [
+          {
+            "node": "Spotify::GetFollowedArtists",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "NoOp1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Spotify::GetFollowedArtists": {
+      "main": [
+        [
+          {
+            "node": "SortArtistsByPopularity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Spotify::GetArtistAlbums": {
+      "main": [
+        [
+          {
+            "node": "MapAlbumInfo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MapAlbumInfo": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable::RetrieveRuns": {
+      "main": [
+        [
+          {
+            "node": "RetrieveLastRun",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "IF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RetrieveLastRun": {
+      "main": [
+        [
+          {
+            "node": "Telegram::SendWelcome",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Airtable::SaveCurrentRun",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "IF": {
+      "main": [
+        [
+          {
+            "node": "Telegram::SendNotification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SortArtistsByPopularity": {
+      "main": [
+        [
+          {
+            "node": "Spotify::GetArtistAlbums",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "NoOp": {
+      "main": [
+        [
+          {
+            "node": "Airtable::RetrieveRuns",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "NoOp1": {
+      "main": [
+        [
+          {
+            "node": "NoOp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {},
+  "id": 1
+}
